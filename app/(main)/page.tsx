@@ -5,8 +5,13 @@ import { collection, doc, documentId, getDoc, getDocs, onSnapshot, orderBy, quer
 import { db } from '@/lib/firebase';
 import type { AppUser, Post } from '@/lib/types';
 import { PostCard } from '@/components/PostCard';
+import { useAuth } from '@/components/AuthProvider';
+import { useUserLikes } from '@/lib/useUserLikes';
+import { deletePost, toggleLike } from '@/lib/posts';
 
 export default function HomePage() {
+  const { firebaseUser } = useAuth();
+  const likedSet = useUserLikes(firebaseUser?.uid);
   const [posts, setPosts] = useState<Post[]>([]);
   const [users, setUsers] = useState<Record<string, AppUser>>({});
   const [quotedPosts, setQuotedPosts] = useState<Record<string, Post>>({});
@@ -18,12 +23,11 @@ export default function HomePage() {
       const list = snap.docs.map((d) => ({ ...(d.data() as Omit<Post, 'postId'>), postId: d.id }));
       setPosts(list);
 
-      // 引用元投稿をまとめて取得
+      // 引用元投稿
       const quotedIds = Array.from(new Set(list.map((p) => p.quotedPostId).filter((x): x is string => !!x)));
       const quotedById: Record<string, Post> = { ...quotedPosts };
       const missing = quotedIds.filter((id) => !quotedById[id]);
       if (missing.length) {
-        // documentId() は最大10件 → 10件ずつ分割(初期実装としてはシンプルに)
         for (let i = 0; i < missing.length; i += 10) {
           const chunk = missing.slice(i, i + 10);
           const qs = await getDocs(query(collection(db(), 'posts'), where(documentId(), 'in', chunk)));
@@ -34,7 +38,6 @@ export default function HomePage() {
       }
       setQuotedPosts(quotedById);
 
-      // 必要なユーザーをまとめてフェッチ(投稿者+引用元の投稿者)
       const needed = new Set<string>();
       for (const p of list) needed.add(p.authorId);
       for (const id of quotedIds) {
@@ -57,6 +60,14 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function handleToggleLike(postId: string) {
+    if (!firebaseUser) return;
+    await toggleLike(postId, firebaseUser.uid);
+  }
+  async function handleDelete(postId: string) {
+    await deletePost(postId);
+  }
+
   return (
     <div>
       <header className="sticky top-0 backdrop-blur bg-background/80 px-4 py-3 border-b border-border z-10">
@@ -78,6 +89,10 @@ export default function HomePage() {
                 author={users[p.authorId] ?? null}
                 quotedPost={qp}
                 quotedAuthor={qa}
+                liked={likedSet.has(p.postId)}
+                isOwn={firebaseUser?.uid === p.authorId}
+                onToggleLike={handleToggleLike}
+                onDelete={handleDelete}
               />
             );
           })}

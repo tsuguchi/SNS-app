@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import type { AppUser, Post } from '@/lib/types';
 
 type Props = {
@@ -8,6 +9,10 @@ type Props = {
   author: AppUser | null;
   quotedPost?: Post | null;
   quotedAuthor?: AppUser | null;
+  liked?: boolean;
+  isOwn?: boolean;
+  onToggleLike?: (postId: string) => Promise<void> | void;
+  onDelete?: (postId: string) => Promise<void> | void;
 };
 
 function timeAgo(ts: { toMillis(): number } | null | undefined) {
@@ -21,7 +26,38 @@ function timeAgo(ts: { toMillis(): number } | null | undefined) {
   return `${Math.floor(h / 24)}日前`;
 }
 
-export function PostCard({ post, author, quotedPost, quotedAuthor }: Props) {
+export function PostCard({
+  post,
+  author,
+  quotedPost,
+  quotedAuthor,
+  liked = false,
+  isOwn = false,
+  onToggleLike,
+  onDelete,
+}: Props) {
+  const [likeBusy, setLikeBusy] = useState(false);
+
+  async function handleLike(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onToggleLike || likeBusy) return;
+    setLikeBusy(true);
+    try {
+      await onToggleLike(post.postId);
+    } finally {
+      setLikeBusy(false);
+    }
+  }
+
+  async function handleDelete(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onDelete) return;
+    if (!confirm('この投稿を削除しますか?')) return;
+    await onDelete(post.postId);
+  }
+
   if (!author) return null;
   return (
     <article className="grid grid-cols-[48px_1fr] gap-3 p-3 border-b border-border hover:bg-bg-hover/50 transition-colors">
@@ -37,6 +73,16 @@ export function PostCard({ post, author, quotedPost, quotedAuthor }: Props) {
           <span>@{author.username}</span>
           <span>·</span>
           <span>{timeAgo(post.createdAt)}</span>
+          {isOwn && (
+            <button
+              onClick={handleDelete}
+              className="ml-auto text-text-secondary hover:text-danger text-base px-2 py-0.5 rounded-full hover:bg-[rgba(244,33,46,0.1)]"
+              aria-label="削除"
+              title="削除"
+            >
+              🗑
+            </button>
+          )}
         </div>
         <div className="mt-1 whitespace-pre-wrap break-words">{post.content}</div>
         {post.imageUrls.length > 0 && (
@@ -73,8 +119,16 @@ export function PostCard({ post, author, quotedPost, quotedAuthor }: Props) {
             </div>
           ))}
         <div className="flex gap-6 mt-2">
-          <button className="text-text-secondary hover:text-primary text-xs flex items-center gap-1 px-2 py-1 rounded-full">
-            🤍 <span>{post.likeCount}</span>
+          <button
+            onClick={handleLike}
+            disabled={likeBusy || !onToggleLike}
+            className={`text-xs flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${
+              liked ? 'text-like' : 'text-text-secondary hover:text-like'
+            } hover:bg-[rgba(249,24,128,0.1)]`}
+            aria-label={liked ? 'いいね解除' : 'いいね'}
+          >
+            <span>{liked ? '❤️' : '🤍'}</span>
+            <span>{post.likeCount}</span>
           </button>
         </div>
       </div>

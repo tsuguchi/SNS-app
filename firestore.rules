@@ -35,7 +35,11 @@ service cloud.firestore {
         && request.resource.data.imageUrls.size() <= 4
         && request.resource.data.likeCount == 0
         && request.resource.data.createdAt == request.time;
-      allow update: if false;
+      // likeCount ±1 のみ更新可(client-side counter)
+      allow update: if isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
+        && (request.resource.data.likeCount == resource.data.likeCount + 1
+            || request.resource.data.likeCount == resource.data.likeCount - 1);
       allow delete: if isSignedIn() && resource.data.authorId == request.auth.uid;
     }
 
