@@ -6,6 +6,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { createPost } from '@/lib/posts';
 import { uploadPostImage, ACCEPTED_TYPES, MAX_FILE_SIZE } from '@/lib/storage';
 import { db } from '@/lib/firebase';
+import { STORAGE_ENABLED } from '@/lib/featureFlags';
 import type { AppUser, Post } from '@/lib/types';
 
 const MAX_TEXT = 280;
@@ -182,16 +183,18 @@ export function PostComposer({ open, onClose, quotedPostId }: Props) {
         )}
         {error && <p className="px-4 text-danger text-sm">{error}</p>}
         <footer className="flex items-center gap-3 px-4 py-3 border-t border-border">
-          <label className="cursor-pointer text-2xl px-2 py-0.5 rounded-full hover:bg-bg-hover" title="画像を追加">
-            🖼️
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp"
-              multiple
-              onChange={handleFiles}
-              hidden
-            />
-          </label>
+          {STORAGE_ENABLED && (
+            <label className="cursor-pointer text-2xl px-2 py-0.5 rounded-full hover:bg-bg-hover" title="画像を追加">
+              🖼️
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                multiple
+                onChange={handleFiles}
+                hidden
+              />
+            </label>
+          )}
           <span
             className={`ml-auto text-sm ${
               remaining < 20 ? 'text-danger' : 'text-text-secondary'
