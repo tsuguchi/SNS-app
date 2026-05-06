@@ -16,18 +16,22 @@ type Props = {
   open: boolean;
   onClose: () => void;
   quotedPostId?: string | null;
+  parentPostId?: string | null;
+  mode?: 'new' | 'quote' | 'reply';
 };
 
-export function PostComposer({ open, onClose, quotedPostId }: Props) {
+export function PostComposer({ open, onClose, quotedPostId, parentPostId, mode = 'new' }: Props) {
   const { firebaseUser } = useAuth();
   const [text, setText] = useState('');
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [quotedPost, setQuotedPost] = useState<Post | null>(null);
-  const [quotedAuthor, setQuotedAuthor] = useState<AppUser | null>(null);
+  const [referencedPost, setReferencedPost] = useState<Post | null>(null);
+  const [referencedAuthor, setReferencedAuthor] = useState<AppUser | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const referencedPostId = mode === 'reply' ? parentPostId : quotedPostId;
 
   useEffect(() => {
     if (open) {
@@ -40,24 +44,24 @@ export function PostComposer({ open, onClose, quotedPostId }: Props) {
   }, [open]);
 
   useEffect(() => {
-    if (!open || !quotedPostId) {
-      setQuotedPost(null);
-      setQuotedAuthor(null);
+    if (!open || !referencedPostId) {
+      setReferencedPost(null);
+      setReferencedAuthor(null);
       return;
     }
     (async () => {
-      const ds = await getDoc(doc(db(), 'posts', quotedPostId));
+      const ds = await getDoc(doc(db(), 'posts', referencedPostId));
       if (!ds.exists()) {
-        setQuotedPost(null);
-        setQuotedAuthor(null);
+        setReferencedPost(null);
+        setReferencedAuthor(null);
         return;
       }
       const p = { ...(ds.data() as Omit<Post, 'postId'>), postId: ds.id };
-      setQuotedPost(p);
+      setReferencedPost(p);
       const us = await getDoc(doc(db(), 'users', p.authorId));
-      setQuotedAuthor(us.exists() ? (us.data() as AppUser) : null);
+      setReferencedAuthor(us.exists() ? (us.data() as AppUser) : null);
     })();
-  }, [open, quotedPostId]);
+  }, [open, referencedPostId]);
 
   if (!open) return null;
 
@@ -109,7 +113,8 @@ export function PostComposer({ open, onClose, quotedPostId }: Props) {
         authorId: firebaseUser.uid,
         content: trimmed,
         imageUrls: uploaded,
-        quotedPostId: quotedPostId ?? null,
+        quotedPostId: mode === 'quote' ? quotedPostId ?? null : null,
+        parentPostId: mode === 'reply' ? parentPostId ?? null : null,
       });
       onClose();
     } catch (e) {
@@ -135,13 +140,15 @@ export function PostComposer({ open, onClose, quotedPostId }: Props) {
           >
             ×
           </button>
-          <h3 className="m-0 flex-1 font-bold">{quotedPostId ? '引用ポスト' : '新規投稿'}</h3>
+          <h3 className="m-0 flex-1 font-bold">
+            {mode === 'reply' ? 'リプライ' : mode === 'quote' ? '引用ポスト' : '新規投稿'}
+          </h3>
         </header>
         <textarea
           ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="いまどうしてる?"
+          placeholder={mode === 'reply' ? '返信を投稿' : 'いまどうしてる?'}
           className="bg-transparent border-0 outline-none p-4 text-lg resize-none min-h-[120px] text-text"
           maxLength={MAX_TEXT + 50}
         />
@@ -162,17 +169,20 @@ export function PostComposer({ open, onClose, quotedPostId }: Props) {
             ))}
           </div>
         )}
-        {quotedPostId && (
+        {referencedPostId && (
           <div className="mx-4 mb-2">
-            {quotedPost && quotedAuthor ? (
+            {mode === 'reply' && (
+              <div className="text-xs text-text-secondary mb-1">返信先:</div>
+            )}
+            {referencedPost && referencedAuthor ? (
               <div className="border border-border rounded-xl p-3">
                 <div className="flex flex-wrap items-center gap-1 text-xs text-text-secondary">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={quotedAuthor.photoURL} alt="" className="w-5 h-5 rounded-full" />
-                  <span className="font-bold text-text">{quotedAuthor.displayName}</span>
-                  <span>@{quotedAuthor.username}</span>
+                  <img src={referencedAuthor.photoURL} alt="" className="w-5 h-5 rounded-full" />
+                  <span className="font-bold text-text">{referencedAuthor.displayName}</span>
+                  <span>@{referencedAuthor.username}</span>
                 </div>
-                <div className="text-sm mt-1 whitespace-pre-wrap break-words">{quotedPost.content}</div>
+                <div className="text-sm mt-1 whitespace-pre-wrap break-words">{referencedPost.content}</div>
               </div>
             ) : (
               <div className="border border-border rounded-xl p-3 text-text-secondary italic">
@@ -207,7 +217,7 @@ export function PostComposer({ open, onClose, quotedPostId }: Props) {
             disabled={!valid || submitting}
             className="bg-primary hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-5 py-2 rounded-full"
           >
-            {submitting ? '...' : '投稿'}
+            {submitting ? '...' : mode === 'reply' ? '返信' : '投稿'}
           </button>
         </footer>
       </div>
