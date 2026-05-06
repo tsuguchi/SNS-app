@@ -8,7 +8,9 @@ import type { AppUser, Post } from '@/lib/types';
 import { PostCard } from '@/components/PostCard';
 import { useAuth } from '@/components/AuthProvider';
 import { useUserLikes } from '@/lib/useUserLikes';
+import { useFollowing } from '@/lib/useFollowing';
 import { deletePost, toggleLike } from '@/lib/posts';
+import { followUser, getFollowerCount, getFollowingCount, unfollowUser } from '@/lib/follows';
 import { getUserByUsername } from '@/lib/users';
 
 type Params = { username: string };
@@ -17,11 +19,15 @@ export default function ProfilePage({ params }: { params: Promise<Params> }) {
   const { username } = use(params);
   const { firebaseUser } = useAuth();
   const likedSet = useUserLikes(firebaseUser?.uid);
+  const followingSet = useFollowing(firebaseUser?.uid);
   const [user, setUser] = useState<AppUser | null | undefined>(undefined);
   const [posts, setPosts] = useState<Post[]>([]);
   const [users, setUsers] = useState<Record<string, AppUser>>({});
   const [quotedPosts, setQuotedPosts] = useState<Record<string, Post>>({});
   const [loading, setLoading] = useState(true);
+  const [followingCount, setFollowingCount] = useState<number | null>(null);
+  const [followerCount, setFollowerCount] = useState<number | null>(null);
+  const [followBusy, setFollowBusy] = useState(false);
 
   useEffect(() => {
     let unsub: (() => void) | undefined;
@@ -32,6 +38,14 @@ export default function ProfilePage({ params }: { params: Promise<Params> }) {
         setLoading(false);
         return;
       }
+      // Counts
+      const [fc, foc] = await Promise.all([
+        getFollowingCount(u.uid),
+        getFollowerCount(u.uid),
+      ]);
+      setFollowingCount(fc);
+      setFollowerCount(foc);
+
       const q = query(
         collection(db(), 'posts'),
         where('authorId', '==', u.uid),
@@ -41,7 +55,6 @@ export default function ProfilePage({ params }: { params: Promise<Params> }) {
         const list = snap.docs.map((d) => ({ ...(d.data() as Omit<Post, 'postId'>), postId: d.id }));
         setPosts(list);
 
-        // 引用元投稿を取得
         const quotedIds = Array.from(new Set(list.map((p) => p.quotedPostId).filter((x): x is string => !!x)));
         const quotedById: Record<string, Post> = { ...quotedPosts };
         const missing = quotedIds.filter((id) => !quotedById[id]);
@@ -93,6 +106,7 @@ export default function ProfilePage({ params }: { params: Promise<Params> }) {
   }
 
   const isMe = firebaseUser?.uid === user.uid;
+  const isFollowing = followingSet.has(user.uid);
 
   async function handleToggleLike(postId: string) {
     if (!firebaseUser) return;
@@ -100,6 +114,21 @@ export default function ProfilePage({ params }: { params: Promise<Params> }) {
   }
   async function handleDelete(postId: string) {
     await deletePost(postId);
+  }
+  async function handleToggleFollow() {
+    if (!firebaseUser || !user || followBusy) return;
+    setFollowBusy(true);
+    try {
+      if (isFollowing) {
+        await unfollowUser(firebaseUser.uid, user.uid);
+        setFollowerCount((c) => (c ?? 0) - 1);
+      } else {
+        await followUser(firebaseUser.uid, user.uid);
+        setFollowerCount((c) => (c ?? 0) + 1);
+      }
+    } finally {
+      setFollowBusy(false);
+    }
   }
 
   return (
@@ -111,18 +140,34 @@ export default function ProfilePage({ params }: { params: Promise<Params> }) {
         <div className="flex justify-between items-start mb-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={user.photoURL} alt="" className="w-24 h-24 rounded-full" />
-          {isMe && (
+          {isMe ? (
             <Link
               href="/profile/edit"
               className="border border-border hover:bg-bg-hover rounded-full px-4 py-1.5 font-bold text-sm"
             >
               プロフィール編集
             </Link>
+          ) : (
+            <button
+              onClick={handleToggleFollow}
+              disabled={followBusy}
+              className={`rounded-full px-4 py-1.5 font-bold text-sm transition-colors ${
+                isFollowing
+                  ? 'border border-border hover:bg-[rgba(244,33,46,0.1)] hover:text-danger hover:border-danger'
+                  : 'bg-text text-background hover:opacity-90'
+              } disabled:opacity-50`}
+            >
+              {isFollowing ? 'フォロー中' : 'フォロー'}
+            </button>
           )}
         </div>
         <div className="text-xl font-extrabold">{user.displayName}</div>
         <div className="text-text-secondary">@{user.username}</div>
         {user.bio && <div className="mt-3 whitespace-pre-wrap">{user.bio}</div>}
+        <div className="mt-3 flex gap-4 text-sm">
+          <span><strong>{followingCount ?? '...'}</strong> <span className="text-text-secondary">フォロー中</span></span>
+          <span><strong>{followerCount ?? '...'}</strong> <span className="text-text-secondary">フォロワー</span></span>
+        </div>
       </section>
       {loading ? (
         <div className="p-10 text-center text-text-secondary">読み込み中...</div>
