@@ -6,7 +6,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/components/AuthProvider';
 
-export function Sidebar() {
+export function Sidebar({ onCompose }: { onCompose: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
   const { appUser } = useAuth();
@@ -37,6 +37,12 @@ export function Sidebar() {
         {navItem('/', '🏠 ホーム')}
         {appUser && navItem(`/profile/${appUser.username}`, '👤 プロフィール')}
       </nav>
+      <button
+        onClick={onCompose}
+        className="bg-primary hover:bg-primary-hover text-white font-bold rounded-full py-3 mt-3 mx-2"
+      >
+        投稿する
+      </button>
       {appUser && (
         <div className="mt-auto flex flex-col gap-2">
           <div className="bg-bg-elev rounded-xl p-3 flex items-center gap-2">
