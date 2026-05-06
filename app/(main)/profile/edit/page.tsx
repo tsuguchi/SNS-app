@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/components/AuthProvider';
 import { isUsernameTaken, updateProfile } from '@/lib/users';
 import { uploadAvatar } from '@/lib/storage';
+import { STORAGE_ENABLED } from '@/lib/featureFlags';
 
 export default function ProfileEditPage() {
   const router = useRouter();
@@ -77,22 +78,24 @@ export default function ProfileEditPage() {
         <h2 className="text-xl font-bold">プロフィール編集</h2>
       </header>
       <form onSubmit={handleSubmit} className="p-4 flex flex-col gap-4">
-        <label className="flex flex-col gap-2 text-sm text-text-secondary">
-          アバター画像
-          <div className="flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={avatarPreview ?? appUser.photoURL}
-              alt=""
-              className="w-20 h-20 rounded-full"
-            />
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp"
-              onChange={handleAvatar}
-            />
-          </div>
-        </label>
+        {STORAGE_ENABLED && (
+          <label className="flex flex-col gap-2 text-sm text-text-secondary">
+            アバター画像
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={avatarPreview ?? appUser.photoURL}
+                alt=""
+                className="w-20 h-20 rounded-full"
+              />
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                onChange={handleAvatar}
+              />
+            </div>
+          </label>
+        )}
         <label className="flex flex-col gap-1.5 text-sm text-text-secondary">
           表示名
           <input
