@@ -10,9 +10,10 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
-    // users: 誰でも閲覧可、本人のみ作成・更新可
+    // users: 公開情報(プロフィール)として誰でも閲覧可、本人のみ作成・更新可
+    // ※ サインアップ時に username 重複チェック(未ログイン状態)を行うため public read
     match /users/{uid} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isOwner(uid)
         && request.resource.data.keys().hasOnly(['uid','displayName','username','bio','photoURL','createdAt'])
         && request.resource.data.uid == uid
