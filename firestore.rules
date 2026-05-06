@@ -1,0 +1,52 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // users: 誰でも閲覧可、本人のみ作成・更新可
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['uid','displayName','username','bio','photoURL','createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.displayName is string
+        && request.resource.data.username is string;
+      allow update: if isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+    }
+
+    // posts: 誰でも閲覧可、ログイン者は自分名義で作成可、自分の投稿のみ削除可、更新は不可(編集機能は将来)
+    match /posts/{postId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.content is string
+        && request.resource.data.content.size() <= 280
+        && request.resource.data.imageUrls is list
+        && request.resource.data.imageUrls.size() <= 4
+        && request.resource.data.likeCount == 0
+        && request.resource.data.createdAt == request.time;
+      allow update: if false;
+      allow delete: if isSignedIn() && resource.data.authorId == request.auth.uid;
+    }
+
+    // likes: postId__userId をドキュメントIDとして一意性を担保
+    match /likes/{likeId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && likeId == request.resource.data.postId + '__' + request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update: if false;
+    }
+  }
+}
