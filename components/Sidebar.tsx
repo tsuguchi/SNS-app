@@ -5,11 +5,13 @@ import { usePathname, useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/components/AuthProvider';
+import { useComposer } from '@/components/ComposerProvider';
 
-export function Sidebar({ onCompose }: { onCompose: () => void }) {
+export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { appUser } = useAuth();
+  const { openComposer } = useComposer();
 
   async function handleLogout() {
     await signOut(auth());
@@ -38,7 +40,7 @@ export function Sidebar({ onCompose }: { onCompose: () => void }) {
         {appUser && navItem(`/profile/${appUser.username}`, '👤 プロフィール')}
       </nav>
       <button
-        onClick={onCompose}
+        onClick={() => openComposer()}
         className="bg-primary hover:bg-primary-hover text-white font-bold rounded-full py-3 mt-3 mx-2"
       >
         投稿する
