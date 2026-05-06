@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SNS-app プロトタイプ</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- ログイン画面 -->
+    <section id="screen-login" class="screen">
+      <div class="login-card">
+        <h1 class="logo">SNS-app</h1>
+        <p class="subtitle">プロトタイプ・モック認証</p>
+        <p class="hint">利用するアカウントを選択してください</p>
+        <div id="login-user-list" class="login-user-list"></div>
+      </div>
+    </section>
+
+    <!-- メインレイアウト -->
+    <section id="screen-main" class="screen hidden">
+      <aside class="sidebar">
+        <h1 class="logo small">SNS-app</h1>
+        <nav>
+          <a href="#home" class="nav-item" data-route="home">🏠 ホーム</a>
+          <a href="#profile" class="nav-item" data-route="profile">👤 プロフィール</a>
+        </nav>
+        <button id="open-composer" class="btn-primary post-btn">投稿する</button>
+        <div class="current-user" id="current-user"></div>
+        <button id="logout-btn" class="btn-secondary">ログアウト</button>
+      </aside>
+
+      <main class="content">
+        <!-- ホーム(タイムライン) -->
+        <div id="view-home" class="view">
+          <header class="view-header"><h2>ホーム</h2></header>
+          <div id="timeline" class="post-list"></div>
+        </div>
+
+        <!-- 投稿詳細 -->
+        <div id="view-post-detail" class="view hidden">
+          <header class="view-header">
+            <button class="back-btn" data-back="1">←</button>
+            <h2>投稿</h2>
+          </header>
+          <div id="post-detail-content"></div>
+        </div>
+
+        <!-- プロフィール -->
+        <div id="view-profile" class="view hidden">
+          <header class="view-header">
+            <button class="back-btn" data-back="1">←</button>
+            <h2>プロフィール</h2>
+          </header>
+          <div id="profile-content"></div>
+        </div>
+
+        <!-- プロフィール編集 -->
+        <div id="view-profile-edit" class="view hidden">
+          <header class="view-header">
+            <button class="back-btn" data-back="1">←</button>
+            <h2>プロフィール編集</h2>
+          </header>
+          <form id="profile-edit-form" class="form-card">
+            <label>表示名
+              <input type="text" name="displayName" maxlength="50" required />
+            </label>
+            <label>ユーザー名(@handle)
+              <input type="text" name="username" maxlength="20" pattern="[a-zA-Z0-9_]+" required />
+            </label>
+            <label>自己紹介
+              <textarea name="bio" maxlength="160" rows="3"></textarea>
+            </label>
+            <label>アバター画像
+              <input type="file" name="avatar" accept="image/*" />
+            </label>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">保存</button>
+            </div>
+          </form>
+        </div>
+      </main>
+    </section>
+
+    <!-- 投稿作成モーダル -->
+    <div id="composer-modal" class="modal hidden">
+      <div class="modal-backdrop" data-close-modal></div>
+      <div class="modal-content">
+        <header class="modal-header">
+          <button class="close-btn" data-close-modal>×</button>
+          <h3 id="composer-title">新規投稿</h3>
+        </header>
+        <div id="composer-quoted" class="quoted-post hidden"></div>
+        <textarea id="composer-text" placeholder="いまどうしてる?" maxlength="280"></textarea>
+        <div id="composer-image-preview" class="image-preview"></div>
+        <footer class="composer-footer">
+          <label class="image-upload-btn">
+            🖼️
+            <input type="file" id="composer-image-input" accept="image/jpeg,image/png,image/gif,image/webp" multiple hidden />
+          </label>
+          <span id="composer-counter" class="counter">280</span>
+          <button id="composer-submit" class="btn-primary">投稿</button>
+        </footer>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
