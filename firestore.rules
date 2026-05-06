@@ -44,6 +44,17 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.authorId == request.auth.uid;
     }
 
+    // follows: followerId__followingId をドキュメントIDに(自分→相手の関係)
+    match /follows/{followId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.followerId == request.auth.uid
+        && request.resource.data.followerId != request.resource.data.followingId
+        && followId == request.resource.data.followerId + '__' + request.resource.data.followingId;
+      allow delete: if isSignedIn() && resource.data.followerId == request.auth.uid;
+      allow update: if false;
+    }
+
     // likes: postId__userId をドキュメントIDとして一意性を担保
     match /likes/{likeId} {
       allow read: if isSignedIn();
