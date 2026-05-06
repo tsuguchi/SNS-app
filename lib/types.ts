@@ -24,3 +24,9 @@ export type Like = {
   userId: string;
   createdAt: Timestamp;
 };
+
+export type Follow = {
+  followerId: string;
+  followingId: string;
+  createdAt: Timestamp;
+};
