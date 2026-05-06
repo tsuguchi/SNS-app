@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import type { AppUser, Post } from '@/lib/types';
+import { useComposer } from '@/components/ComposerProvider';
 
 type Props = {
   post: Post;
@@ -37,6 +38,13 @@ export function PostCard({
   onDelete,
 }: Props) {
   const [likeBusy, setLikeBusy] = useState(false);
+  const { openComposer } = useComposer();
+
+  function handleQuote(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    openComposer(post.postId);
+  }
 
   async function handleLike(e: React.MouseEvent) {
     e.preventDefault();
@@ -119,6 +127,14 @@ export function PostCard({
             </div>
           ))}
         <div className="flex gap-6 mt-2">
+          <button
+            onClick={handleQuote}
+            className="text-text-secondary hover:text-primary text-xs flex items-center gap-1 px-2 py-1 rounded-full hover:bg-[rgba(29,155,240,0.1)] transition-colors"
+            aria-label="引用"
+          >
+            <span>💬</span>
+            <span>引用</span>
+          </button>
           <button
             onClick={handleLike}
             disabled={likeBusy || !onToggleLike}
