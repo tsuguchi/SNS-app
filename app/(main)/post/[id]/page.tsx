@@ -10,6 +10,7 @@ import { PostCard } from '@/components/PostCard';
 import { useAuth } from '@/components/AuthProvider';
 import { useUserLikes } from '@/lib/useUserLikes';
 import { deletePost, toggleLike } from '@/lib/posts';
+import { fetchUsersByUids } from '@/lib/users';
 
 type Params = { id: string };
 
@@ -87,13 +88,11 @@ export default function PostDetailPage({ params }: { params: Promise<Params> }) 
       setReplies(list);
       const cache: Record<string, AppUser> = { ...replyAuthors };
       const need = Array.from(new Set(list.map((p) => p.authorId))).filter((u) => !cache[u]);
-      await Promise.all(
-        need.map(async (uid) => {
-          const ds = await getDoc(doc(db(), 'users', uid));
-          if (ds.exists()) cache[uid] = ds.data() as AppUser;
-        })
-      );
-      setReplyAuthors(cache);
+      if (need.length) {
+        const fetched = await fetchUsersByUids(need);
+        Object.assign(cache, fetched);
+        setReplyAuthors(cache);
+      }
     });
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
