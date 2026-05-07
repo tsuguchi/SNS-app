@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
 import { Sidebar } from '@/components/Sidebar';
 import { ComposerProvider } from '@/components/ComposerProvider';
+import { RightPane } from '@/components/RightPane';
 
 export default function MainLayout({ children }: { children: ReactNode }) {
   const { firebaseUser, loading } = useAuth();
@@ -21,9 +22,10 @@ export default function MainLayout({ children }: { children: ReactNode }) {
 
   return (
     <ComposerProvider>
-      <div className="grid grid-cols-[260px_1fr] max-w-[1100px] mx-auto min-h-screen">
+      <div className="grid grid-cols-[260px_1fr] lg:grid-cols-[260px_minmax(0,600px)_340px] max-w-[1300px] mx-auto min-h-screen">
         <Sidebar />
-        <main className="border-r border-border min-w-0">{children}</main>
+        <main className="border-r border-border min-w-0 lg:border-r-0 lg:border-x">{children}</main>
+        <RightPane />
       </div>
     </ComposerProvider>
   );
