@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import type { AppUser, Post } from '@/lib/types';
 import { searchPostsByContent, searchUsers } from '@/lib/search';
 import { PostCard } from '@/components/PostCard';
@@ -15,9 +16,11 @@ type Tab = 'users' | 'posts';
 export default function SearchPage() {
   const { firebaseUser } = useAuth();
   const likedSet = useUserLikes(firebaseUser?.uid);
+  const params = useSearchParams();
+  const initialQ = params.get('q') ?? '';
   const [tab, setTab] = useState<Tab>('users');
-  const [q, setQ] = useState('');
-  const [debouncedQ, setDebouncedQ] = useState('');
+  const [q, setQ] = useState(initialQ);
+  const [debouncedQ, setDebouncedQ] = useState(initialQ);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [postAuthors, setPostAuthors] = useState<Record<string, AppUser>>({});
@@ -27,6 +30,13 @@ export default function SearchPage() {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
     return () => clearTimeout(t);
   }, [q]);
+
+  // URL ?q= が変わったら入力欄に反映
+  useEffect(() => {
+    const next = params.get('q') ?? '';
+    setQ(next);
+    setDebouncedQ(next);
+  }, [params]);
 
   useEffect(() => {
     if (!debouncedQ) {
