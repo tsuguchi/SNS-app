@@ -2,14 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import type { AppUser, Post } from '@/lib/types';
 import { searchPostsByContent, searchUsers } from '@/lib/search';
 import { PostCard } from '@/components/PostCard';
 import { useAuth } from '@/components/AuthProvider';
 import { useUserLikes } from '@/lib/useUserLikes';
 import { deletePost, toggleLike } from '@/lib/posts';
+import { fetchUsersByUids } from '@/lib/users';
 
 type Tab = 'users' | 'posts';
 
@@ -46,12 +45,10 @@ export default function SearchPage() {
           setPosts(list);
           const cache: Record<string, AppUser> = { ...postAuthors };
           const need = Array.from(new Set(list.map((p) => p.authorId))).filter((u) => !cache[u]);
-          await Promise.all(
-            need.map(async (uid) => {
-              const ds = await getDoc(doc(db(), 'users', uid));
-              if (ds.exists()) cache[uid] = ds.data() as AppUser;
-            })
-          );
+          if (need.length) {
+            const fetched = await fetchUsersByUids(need);
+            Object.assign(cache, fetched);
+          }
           setPostAuthors(cache);
         }
       } finally {

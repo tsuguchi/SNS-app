@@ -1,7 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { collection, doc, documentId, getDoc, getDocs, onSnapshot, orderBy, query, limit, where } from 'firebase/firestore';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  collection,
+  documentId,
+  getDocs,
+  limit as fLimit,
+  onSnapshot,
+  orderBy,
+  query,
+  startAfter,
+  where,
+  type DocumentSnapshot,
+  type Query,
+} from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { AppUser, Post } from '@/lib/types';
 import { PostCard } from '@/components/PostCard';
@@ -9,8 +21,10 @@ import { useAuth } from '@/components/AuthProvider';
 import { useUserLikes } from '@/lib/useUserLikes';
 import { useFollowing } from '@/lib/useFollowing';
 import { deletePost, toggleLike } from '@/lib/posts';
+import { fetchUsersByUids } from '@/lib/users';
 
 type Tab = 'all' | 'following';
+const PAGE_SIZE = 20;
 
 export default function HomePage() {
   const { firebaseUser } = useAuth();
@@ -21,70 +35,117 @@ export default function HomePage() {
   const [users, setUsers] = useState<Record<string, AppUser>>({});
   const [quotedPosts, setQuotedPosts] = useState<Record<string, Post>>({});
   const [loading, setLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const lastDocRef = useRef<DocumentSnapshot | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  // フォロー中タブで参照する uid 配列(自分自身も含める)。Firestore where in は最大30件
   const followingIds = useMemo(() => {
     if (!firebaseUser) return [] as string[];
     return [firebaseUser.uid, ...Array.from(followingSet)].slice(0, 30);
   }, [firebaseUser, followingSet]);
 
+  const baseQuery = useCallback((): Query | null => {
+    if (!firebaseUser) return null;
+    const coll = collection(db(), 'posts');
+    if (tab === 'following') {
+      if (followingIds.length === 0) return null;
+      return query(coll, where('authorId', 'in', followingIds), orderBy('createdAt', 'desc'));
+    }
+    return query(coll, orderBy('createdAt', 'desc'));
+  }, [firebaseUser, tab, followingIds]);
+
+  // タブまたは認証ユーザー切替時に先頭ページを購読
   useEffect(() => {
-    if (!firebaseUser) return;
-    setLoading(true);
-
-    const baseColl = collection(db(), 'posts');
-    const q =
-      tab === 'all'
-        ? query(baseColl, orderBy('createdAt', 'desc'), limit(50))
-        : followingIds.length === 0
-        ? null
-        : query(baseColl, where('authorId', 'in', followingIds), orderBy('createdAt', 'desc'), limit(50));
-
+    const q = baseQuery();
     if (!q) {
       setPosts([]);
       setLoading(false);
+      lastDocRef.current = null;
+      setHasMore(false);
       return;
     }
-
-    const unsub = onSnapshot(q, async (snap) => {
+    setLoading(true);
+    const firstPage = query(q, fLimit(PAGE_SIZE));
+    const unsub = onSnapshot(firstPage, async (snap) => {
       const list = snap.docs.map((d) => ({ ...(d.data() as Omit<Post, 'postId'>), postId: d.id }));
       setPosts(list);
-
-      const quotedIds = Array.from(new Set(list.map((p) => p.quotedPostId).filter((x): x is string => !!x)));
-      const quotedById: Record<string, Post> = { ...quotedPosts };
-      const missing = quotedIds.filter((id) => !quotedById[id]);
-      if (missing.length) {
-        for (let i = 0; i < missing.length; i += 10) {
-          const chunk = missing.slice(i, i + 10);
-          const qs = await getDocs(query(collection(db(), 'posts'), where(documentId(), 'in', chunk)));
-          qs.forEach((d) => {
-            quotedById[d.id] = { ...(d.data() as Omit<Post, 'postId'>), postId: d.id };
-          });
-        }
-      }
-      setQuotedPosts(quotedById);
-
-      const needed = new Set<string>();
-      for (const p of list) needed.add(p.authorId);
-      for (const id of quotedIds) {
-        const qp = quotedById[id];
-        if (qp) needed.add(qp.authorId);
-      }
-      const cache: Record<string, AppUser> = { ...users };
-      await Promise.all(
-        Array.from(needed)
-          .filter((uid) => !cache[uid])
-          .map(async (uid) => {
-            const ds = await getDoc(doc(db(), 'users', uid));
-            if (ds.exists()) cache[uid] = ds.data() as AppUser;
-          })
-      );
-      setUsers(cache);
+      lastDocRef.current = snap.docs[snap.docs.length - 1] ?? null;
+      setHasMore(snap.docs.length === PAGE_SIZE);
+      await hydratePostMeta(list);
       setLoading(false);
     });
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, firebaseUser, followingIds.join(',')]);
+  }, [baseQuery]);
+
+  // 引用元投稿 + 著者を一括取得して state を補完
+  async function hydratePostMeta(list: Post[]) {
+    const quotedIds = Array.from(new Set(list.map((p) => p.quotedPostId).filter((x): x is string => !!x)));
+    let quotedById: Record<string, Post> = {};
+    if (quotedIds.length) {
+      const ref = collection(db(), 'posts');
+      for (let i = 0; i < quotedIds.length; i += 30) {
+        const chunk = quotedIds.slice(i, i + 30);
+        const qs = await getDocs(query(ref, where(documentId(), 'in', chunk)));
+        qs.forEach((d) => {
+          quotedById[d.id] = { ...(d.data() as Omit<Post, 'postId'>), postId: d.id };
+        });
+      }
+      setQuotedPosts((prev) => {
+        quotedById = { ...prev, ...quotedById };
+        return quotedById;
+      });
+    }
+    const needAuthors = new Set<string>();
+    for (const p of list) needAuthors.add(p.authorId);
+    for (const id of quotedIds) {
+      const qp = quotedById[id];
+      if (qp) needAuthors.add(qp.authorId);
+    }
+    setUsers((prev) => {
+      const missing = Array.from(needAuthors).filter((u) => !prev[u]);
+      if (!missing.length) return prev;
+      // 非同期だが副作用としてはOK(下のIIFE)
+      void (async () => {
+        const fetched = await fetchUsersByUids(missing);
+        setUsers((curr) => ({ ...curr, ...fetched }));
+      })();
+      return prev;
+    });
+  }
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    const q = baseQuery();
+    if (!q || !lastDocRef.current) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = query(q, startAfter(lastDocRef.current), fLimit(PAGE_SIZE));
+      const snap = await getDocs(nextPage);
+      const more = snap.docs.map((d) => ({ ...(d.data() as Omit<Post, 'postId'>), postId: d.id }));
+      setPosts((prev) => [...prev, ...more]);
+      lastDocRef.current = snap.docs[snap.docs.length - 1] ?? lastDocRef.current;
+      setHasMore(snap.docs.length === PAGE_SIZE);
+      await hydratePostMeta(more);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [baseQuery, hasMore, loadingMore]);
+
+  // 無限スクロール用 IntersectionObserver
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadMore();
+      },
+      { rootMargin: '400px 0px' }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [loadMore]);
 
   async function handleToggleLike(postId: string) {
     if (!firebaseUser) return;
@@ -148,8 +209,16 @@ export default function HomePage() {
               />
             );
           })}
+          <div ref={sentinelRef} className="h-10" />
+          {loadingMore && (
+            <div className="p-4 text-center text-text-secondary text-sm">読み込み中...</div>
+          )}
+          {!hasMore && posts.length > 0 && (
+            <div className="p-4 text-center text-text-secondary text-sm">これ以上の投稿はありません</div>
+          )}
         </div>
       )}
     </div>
   );
 }
+

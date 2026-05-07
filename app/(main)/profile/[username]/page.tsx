@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { collection, doc, documentId, getDoc, getDocs, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { collection, documentId, getDocs, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { AppUser, Post } from '@/lib/types';
 import { PostCard } from '@/components/PostCard';
@@ -11,7 +11,7 @@ import { useUserLikes } from '@/lib/useUserLikes';
 import { useFollowing } from '@/lib/useFollowing';
 import { deletePost, toggleLike } from '@/lib/posts';
 import { followUser, getFollowerCount, getFollowingCount, unfollowUser } from '@/lib/follows';
-import { getUserByUsername } from '@/lib/users';
+import { fetchUsersByUids, getUserByUsername } from '@/lib/users';
 
 type Params = { username: string };
 
@@ -75,14 +75,11 @@ export default function ProfilePage({ params }: { params: Promise<Params> }) {
           const qp = quotedById[id];
           if (qp) needAuthors.add(qp.authorId);
         }
-        await Promise.all(
-          Array.from(needAuthors)
-            .filter((uid) => !cache[uid])
-            .map(async (uid) => {
-              const ds = await getDoc(doc(db(), 'users', uid));
-              if (ds.exists()) cache[uid] = ds.data() as AppUser;
-            })
-        );
+        const missingAuthors = Array.from(needAuthors).filter((uid) => !cache[uid]);
+        if (missingAuthors.length) {
+          const fetched = await fetchUsersByUids(missingAuthors);
+          Object.assign(cache, fetched);
+        }
         setUsers(cache);
         setLoading(false);
       });
