@@ -10,6 +10,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { createNotification } from '@/lib/notifications';
 
 function followId(followerId: string, followingId: string) {
   return `${followerId}__${followingId}`;
@@ -22,6 +23,11 @@ export async function followUser(followerId: string, followingId: string) {
     followerId,
     followingId,
     createdAt: serverTimestamp(),
+  });
+  await createNotification({
+    recipientId: followingId,
+    senderId: followerId,
+    type: 'follow',
   });
 }
 

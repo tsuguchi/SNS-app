@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   signInWithEmailAndPassword,
@@ -119,6 +120,14 @@ export default function LoginPage() {
         >
           {mode === 'signin' ? 'アカウントを作成する' : 'すでにアカウントをお持ちの方'}
         </button>
+        {mode === 'signin' && (
+          <Link
+            href="/forgot-password"
+            className="block text-center mt-2 text-text-secondary text-xs hover:underline"
+          >
+            パスワードを忘れた方
+          </Link>
+        )}
       </div>
     </div>
   );
