@@ -7,6 +7,7 @@ import { db } from '@/lib/firebase';
 import type { AppUser, Notification, Post } from '@/lib/types';
 import { useAuth } from '@/components/AuthProvider';
 import { markAllAsRead, markAsRead } from '@/lib/notifications';
+import { fetchUsersByUids } from '@/lib/users';
 
 function timeAgo(ts: { toMillis(): number } | null | undefined) {
   if (!ts) return '';
@@ -44,27 +45,30 @@ export default function NotificationsPage() {
       const list = snap.docs.map((d) => ({ ...(d.data() as Omit<Notification, 'notificationId'>), notificationId: d.id }));
       setItems(list);
 
-      // 関連ユーザー取得
+      // 関連ユーザーをまとめて取得
       const senderIds = Array.from(new Set(list.map((n) => n.senderId)));
       const userCache: Record<string, AppUser> = { ...users };
-      for (let i = 0; i < senderIds.length; i += 10) {
-        const chunk = senderIds.slice(i, i + 10).filter((u) => !userCache[u]);
-        if (!chunk.length) continue;
-        const us = await getDocs(query(collection(db(), 'users'), where(documentId(), 'in', chunk)));
-        us.forEach((d) => { userCache[d.id] = d.data() as AppUser; });
+      const missingUsers = senderIds.filter((u) => !userCache[u]);
+      if (missingUsers.length) {
+        const fetched = await fetchUsersByUids(missingUsers);
+        Object.assign(userCache, fetched);
       }
       setUsers(userCache);
 
-      // 関連投稿取得
+      // 関連投稿をまとめて取得
       const postIds = Array.from(new Set(list.map((n) => n.postId).filter((x): x is string => !!x)));
       const postCache: Record<string, Post> = { ...posts };
-      const need = postIds.filter((p) => !postCache[p]);
-      await Promise.all(
-        need.map(async (id) => {
-          const ds = await getDoc(doc(db(), 'posts', id));
-          if (ds.exists()) postCache[id] = { ...(ds.data() as Omit<Post, 'postId'>), postId: ds.id };
-        })
-      );
+      const needPosts = postIds.filter((p) => !postCache[p]);
+      if (needPosts.length) {
+        const ref = collection(db(), 'posts');
+        for (let i = 0; i < needPosts.length; i += 30) {
+          const chunk = needPosts.slice(i, i + 30);
+          const ps = await getDocs(query(ref, where(documentId(), 'in', chunk)));
+          ps.forEach((d) => {
+            postCache[d.id] = { ...(d.data() as Omit<Post, 'postId'>), postId: d.id };
+          });
+        }
+      }
       setPosts(postCache);
 
       setLoading(false);

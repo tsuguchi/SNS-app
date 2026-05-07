@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import type { AppUser, Post } from '@/lib/types';
 import { useComposer } from '@/components/ComposerProvider';
 
@@ -27,7 +27,7 @@ function timeAgo(ts: { toMillis(): number } | null | undefined) {
   return `${Math.floor(h / 24)}日前`;
 }
 
-export function PostCard({
+function PostCardImpl({
   post,
   author,
   quotedPost,
@@ -38,7 +38,19 @@ export function PostCard({
   onDelete,
 }: Props) {
   const [likeBusy, setLikeBusy] = useState(false);
+  // 楽観的更新: クリック直後にローカル状態を上書きして即時反映、サーバー応答後は親 state(liked/likeCount)で同期
+  const [optimisticLiked, setOptimisticLiked] = useState<boolean | null>(null);
+  const [optimisticDelta, setOptimisticDelta] = useState(0);
   const { openComposer } = useComposer();
+
+  // 親の liked が更新されたら楽観的状態をリセット
+  useEffect(() => {
+    setOptimisticLiked(null);
+    setOptimisticDelta(0);
+  }, [liked, post.likeCount]);
+
+  const displayLiked = optimisticLiked ?? liked;
+  const displayLikeCount = post.likeCount + optimisticDelta;
 
   function handleQuote(e: React.MouseEvent) {
     e.preventDefault();
@@ -56,9 +68,16 @@ export function PostCard({
     e.preventDefault();
     e.stopPropagation();
     if (!onToggleLike || likeBusy) return;
+    const willLike = !displayLiked;
+    setOptimisticLiked(willLike);
+    setOptimisticDelta(willLike ? 1 : -1);
     setLikeBusy(true);
     try {
       await onToggleLike(post.postId);
+    } catch {
+      // ロールバック
+      setOptimisticLiked(null);
+      setOptimisticDelta(0);
     } finally {
       setLikeBusy(false);
     }
@@ -107,7 +126,7 @@ export function PostCard({
           >
             {post.imageUrls.map((src, i) => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={i} src={src} alt="" className="w-full max-h-[280px] object-cover" />
+              <img key={i} src={src} alt="" loading="lazy" className="w-full max-h-[280px] object-cover" />
             ))}
           </div>
         )}
@@ -151,17 +170,20 @@ export function PostCard({
           </button>
           <button
             onClick={handleLike}
-            disabled={likeBusy || !onToggleLike}
+            disabled={!onToggleLike}
             className={`text-xs flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${
-              liked ? 'text-like' : 'text-text-secondary hover:text-like'
+              displayLiked ? 'text-like' : 'text-text-secondary hover:text-like'
             } hover:bg-[rgba(249,24,128,0.1)]`}
-            aria-label={liked ? 'いいね解除' : 'いいね'}
+            aria-label={displayLiked ? 'いいね解除' : 'いいね'}
           >
-            <span>{liked ? '❤️' : '🤍'}</span>
-            <span>{post.likeCount}</span>
+            <span>{displayLiked ? '❤️' : '🤍'}</span>
+            <span>{displayLikeCount}</span>
           </button>
         </div>
       </div>
     </article>
   );
 }
+
+// 親 state 変化での全カード再レンダーを抑制
+export const PostCard = memo(PostCardImpl);
