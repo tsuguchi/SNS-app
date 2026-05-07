@@ -6,12 +6,14 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/components/AuthProvider';
 import { useComposer } from '@/components/ComposerProvider';
+import { useUnreadNotifications } from '@/lib/useUnreadNotifications';
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { appUser } = useAuth();
+  const { appUser, firebaseUser } = useAuth();
   const { openComposer } = useComposer();
+  const unread = useUnreadNotifications(firebaseUser?.uid);
 
   async function handleLogout() {
     await signOut(auth());
@@ -37,6 +39,20 @@ export function Sidebar() {
       <h1 className="text-xl font-extrabold text-primary px-4 pt-2">SNS-app</h1>
       <nav className="flex flex-col gap-1 mt-3">
         {navItem('/', '🏠 ホーム')}
+        {navItem('/search', '🔍 検索')}
+        <Link
+          href="/notifications"
+          className={`px-4 py-3 rounded-full font-semibold hover:bg-bg-hover transition-colors flex items-center gap-2 ${
+            pathname === '/notifications' ? 'bg-bg-hover' : ''
+          }`}
+        >
+          <span>🔔 通知</span>
+          {unread > 0 && (
+            <span className="ml-auto bg-primary text-white text-xs font-bold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center">
+              {unread > 99 ? '99+' : unread}
+            </span>
+          )}
+        </Link>
         {appUser && navItem(`/profile/${appUser.username}`, '👤 プロフィール')}
       </nav>
       <button

@@ -43,7 +43,13 @@ export function PostCard({
   function handleQuote(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    openComposer(post.postId);
+    openComposer({ quotedPostId: post.postId });
+  }
+
+  function handleReply(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    openComposer({ parentPostId: post.postId });
   }
 
   async function handleLike(e: React.MouseEvent) {
@@ -128,11 +134,19 @@ export function PostCard({
           ))}
         <div className="flex gap-6 mt-2">
           <button
+            onClick={handleReply}
+            className="text-text-secondary hover:text-primary text-xs flex items-center gap-1 px-2 py-1 rounded-full hover:bg-[rgba(29,155,240,0.1)] transition-colors"
+            aria-label="返信"
+          >
+            <span>💬</span>
+            <span>{post.replyCount > 0 ? post.replyCount : '返信'}</span>
+          </button>
+          <button
             onClick={handleQuote}
             className="text-text-secondary hover:text-primary text-xs flex items-center gap-1 px-2 py-1 rounded-full hover:bg-[rgba(29,155,240,0.1)] transition-colors"
             aria-label="引用"
           >
-            <span>💬</span>
+            <span>🔁</span>
             <span>引用</span>
           </button>
           <button

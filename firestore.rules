@@ -35,12 +35,21 @@ service cloud.firestore {
         && request.resource.data.imageUrls is list
         && request.resource.data.imageUrls.size() <= 4
         && request.resource.data.likeCount == 0
+        && request.resource.data.replyCount == 0
         && request.resource.data.createdAt == request.time;
-      // likeCount ±1 のみ更新可(client-side counter)
+      // likeCount / replyCount を ±1 のみ更新可(client-side counter)
+      // 既存投稿に replyCount フィールドがないケースに備えて get(...) でデフォルト 0 を使う
       allow update: if isSignedIn()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
-        && (request.resource.data.likeCount == resource.data.likeCount + 1
-            || request.resource.data.likeCount == resource.data.likeCount - 1);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount', 'replyCount'])
+        && (
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
+            && (request.resource.data.likeCount == resource.data.get('likeCount', 0) + 1
+                || request.resource.data.likeCount == resource.data.get('likeCount', 0) - 1))
+          ||
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['replyCount'])
+            && (request.resource.data.replyCount == resource.data.get('replyCount', 0) + 1
+                || request.resource.data.replyCount == resource.data.get('replyCount', 0) - 1))
+        );
       allow delete: if isSignedIn() && resource.data.authorId == request.auth.uid;
     }
 
@@ -53,6 +62,22 @@ service cloud.firestore {
         && followId == request.resource.data.followerId + '__' + request.resource.data.followingId;
       allow delete: if isSignedIn() && resource.data.followerId == request.auth.uid;
       allow update: if false;
+    }
+
+    // notifications: 通知。受信者のみ read 可、送信側ユーザーが create
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && resource.data.recipientId == request.auth.uid;
+      allow list: if isSignedIn(); // クエリ自体は許可、where 句で recipientId 制限を実施
+      allow create: if isSignedIn()
+        && request.resource.data.senderId == request.auth.uid
+        && request.resource.data.recipientId is string
+        && request.resource.data.recipientId != request.auth.uid
+        && request.resource.data.type in ['like','follow','reply']
+        && request.resource.data.read == false;
+      // 受信者のみ read フラグの変更可
+      allow update: if isSignedIn() && resource.data.recipientId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isSignedIn() && resource.data.recipientId == request.auth.uid;
     }
 
     // likes: postId__userId をドキュメントIDとして一意性を担保
